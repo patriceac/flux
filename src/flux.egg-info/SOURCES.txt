@@ -1,3 +1,4 @@
+.gitignore
 LICENSE
 README.md
 demo_gr.py

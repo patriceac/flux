@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: flux
-Version: 0.0.post23+gc23ae24
+Version: 0.0.post24+gb518d0a.d20240815
 Summary: Inference codebase for FLUX
 Author-email: Black Forest Labs <support@blackforestlabs.ai>
 Requires-Python: >=3.10
