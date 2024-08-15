@@ -108,7 +108,11 @@ def denoise(
 ):
     # this is ignored for schnell
     guidance_vec = torch.full((img.shape[0],), guidance, device=img.device, dtype=img.dtype)
-    for t_curr, t_prev in zip(timesteps[:-1], timesteps[1:]):
+    
+    # Start loop through timesteps with a print statement for each step
+    for i, (t_curr, t_prev) in enumerate(zip(timesteps[:-1], timesteps[1:])):
+        print(f"Step {i + 1}/{len(timesteps) - 1}: t_curr = {t_curr}, t_prev = {t_prev}")
+        
         t_vec = torch.full((img.shape[0],), t_curr, dtype=img.dtype, device=img.device)
         pred = model(
             img=img,
