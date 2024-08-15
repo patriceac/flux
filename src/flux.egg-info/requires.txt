@@ -1,5 +1,5 @@
-torch>=2.0.0
-torchvision
+torch @ https://download.pytorch.org/whl/cu118/torch-2.4.0+cu118-cp39-cp39-win_amd64.whl
+torchvision @ https://download.pytorch.org/whl/cu118/torchvision-0.19.0+cu118-cp39-cp39-win_amd64.whl
 einops
 fire>=0.6.0
 huggingface-hub
