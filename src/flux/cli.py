@@ -170,6 +170,12 @@ def main(
         seed=seed,
     )
 
+    # Load everything to the GPU at the start if offload is not enabled
+    t5 = load_t5(torch_device, max_length=256 if name == "flux-schnell" else 512).to(torch_device)
+    clip = load_clip(torch_device).to(torch_device)
+    model = load_flow_model(name, device=torch_device if not offload else "cpu")
+    ae = load_ae(name, device=torch_device if not offload else "cpu")
+
     if loop:
         opts = parse_prompt(opts)
 
@@ -179,7 +185,7 @@ def main(
         print(f"Generating with seed {opts.seed}:\n{opts.prompt}")
         t0 = time.perf_counter()
 
-        # prepare input
+        # Prepare input with everything already on the GPU if not offloading
         x = get_noise(
             1,
             opts.height,
@@ -189,33 +195,29 @@ def main(
             seed=opts.seed,
         )
         opts.seed = None
-        if offload:
-            ae = ae.cpu()
-            torch.cuda.empty_cache()
-            t5, clip = t5.to(torch_device), clip.to(torch_device)
+
         inp = prepare(t5, clip, x, prompt=opts.prompt)
         timesteps = get_schedule(opts.num_steps, inp["img"].shape[1], shift=(name != "flux-schnell"))
 
-        # offload TEs to CPU, load model to gpu
-        if offload:
-            t5, clip = t5.cpu(), clip.cpu()
-            torch.cuda.empty_cache()
-            model = model.to(torch_device)
-
-        # denoise initial noise
+        # Denoise without moving the model between devices
         x = denoise(model, **inp, timesteps=timesteps, guidance=opts.guidance)
 
-        # offload model, load autoencoder to gpu
-        if offload:
-            model.cpu()
-            torch.cuda.empty_cache()
-            ae.decoder.to(x.device)
-
-        # decode latents to pixel space
+        # Decode latents to pixel space directly
         x = unpack(x.float(), opts.height, opts.width)
         with torch.autocast(device_type=torch_device.type, dtype=torch.bfloat16):
             x = ae.decode(x)
+
         t1 = time.perf_counter()
+
+        fn = output_name.format(idx=idx)
+        print(f"Done in {t1 - t0:.1f}s. Saving {fn}")
+        # The rest of your saving code remains unchanged
+
+        if loop:
+            print("-" * 80)
+            opts = parse_prompt(opts)
+        else:
+            opts = None
 
         fn = output_name.format(idx=idx)
         print(f"Done in {t1 - t0:.1f}s. Saving {fn}")
