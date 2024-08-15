@@ -96,24 +96,22 @@ def get_schedule(
 
 def denoise(
     model: Flux,
-    # model input
     img: Tensor,
     img_ids: Tensor,
     txt: Tensor,
     txt_ids: Tensor,
     vec: Tensor,
-    # sampling parameters
     timesteps: list[float],
     guidance: float = 4.0,
 ):
-    # this is ignored for schnell
     guidance_vec = torch.full((img.shape[0],), guidance, device=img.device, dtype=img.dtype)
     
-    # Start loop through timesteps with a print statement for each step
-    for i, (t_curr, t_prev) in enumerate(zip(timesteps[:-1], timesteps[1:])):
-        print(f"Step {i + 1}/{len(timesteps) - 1}: t_curr = {t_curr}, t_prev = {t_prev}")
-        
-        t_vec = torch.full((img.shape[0],), t_curr, dtype=img.dtype, device=img.device)
+    # Precompute all necessary tensors for efficiency
+    t_vecs = [torch.full((img.shape[0],), t, dtype=img.dtype, device=img.device) for t in timesteps[:-1]]
+    t_deltas = [t_prev - t_curr for t_curr, t_prev in zip(timesteps[:-1], timesteps[1:])]
+
+    # Loop over the precomputed timesteps
+    for i, (t_vec, delta_t) in enumerate(zip(t_vecs, t_deltas)):
         pred = model(
             img=img,
             img_ids=img_ids,
@@ -124,7 +122,9 @@ def denoise(
             guidance=guidance_vec,
         )
 
-        img = img + (t_prev - t_curr) * pred
+        # Update the image using the precomputed delta
+        img = img + delta_t * pred
+        print(f"Processed timestep {i+1}/{len(t_vecs)}")  # Optional: to track progress
 
     return img
 
