@@ -14,15 +14,12 @@ from flux.cli import SamplingOptions
 from flux.sampling import denoise, get_noise, get_schedule, prepare, unpack
 from flux.util import configs, embed_watermark, load_ae, load_clip, load_flow_model, load_t5
 
-NSFW_THRESHOLD = 0.85
-
 def get_models(name: str, device: torch.device, offload: bool, is_schnell: bool):
     t5 = load_t5(device, max_length=256 if is_schnell else 512)
     clip = load_clip(device)
     model = load_flow_model(name, device="cpu" if offload else device)
     ae = load_ae(name, device="cpu" if offload else device)
-    nsfw_classifier = pipeline("image-classification", model="Falconsai/nsfw_image_detection")
-    return model, ae, t5, clip, nsfw_classifier
+    return model, ae, t5, clip
 
 class FluxGenerator:
     def __init__(self, model_name: str, device: str, offload: bool):
@@ -30,7 +27,7 @@ class FluxGenerator:
         self.offload = offload
         self.model_name = model_name
         self.is_schnell = model_name == "flux-schnell"
-        self.model, self.ae, self.t5, self.clip, self.nsfw_classifier = get_models(
+        self.model, self.ae, self.t5, self.clip = get_models(
             model_name,
             device=self.device,
             offload=self.offload,
@@ -138,26 +135,22 @@ class FluxGenerator:
         x = rearrange(x[0], "c h w -> h w c")
 
         img = Image.fromarray((127.5 * (x + 1.0)).cpu().byte().numpy())
-        nsfw_score = [x["score"] for x in self.nsfw_classifier(img) if x["label"] == "nsfw"][0]
 
-        if nsfw_score < NSFW_THRESHOLD:
-            filename = f"output/gradio/{uuid.uuid4()}.jpg"
-            os.makedirs(os.path.dirname(filename), exist_ok=True)
-            exif_data = Image.Exif()
-            if init_image is None:
-                exif_data[ExifTags.Base.Software] = "AI generated;txt2img;flux"
-            else:
-                exif_data[ExifTags.Base.Software] = "AI generated;img2img;flux"
-            exif_data[ExifTags.Base.Make] = "Black Forest Labs"
-            exif_data[ExifTags.Base.Model] = self.model_name
-            if add_sampling_metadata:
-                exif_data[ExifTags.Base.ImageDescription] = prompt
-            
-            img.save(filename, format="jpeg", exif=exif_data, quality=95, subsampling=0)
-
-            return img, str(opts.seed), filename, None
+        filename = f"output/gradio/{uuid.uuid4()}.jpg"
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        exif_data = Image.Exif()
+        if init_image is None:
+            exif_data[ExifTags.Base.Software] = "AI generated;txt2img;flux"
         else:
-            return None, str(opts.seed), None, "Your generated image may contain NSFW content."
+            exif_data[ExifTags.Base.Software] = "AI generated;img2img;flux"
+        exif_data[ExifTags.Base.Make] = "Black Forest Labs"
+        exif_data[ExifTags.Base.Model] = self.model_name
+        if add_sampling_metadata:
+            exif_data[ExifTags.Base.ImageDescription] = prompt
+        
+        img.save(filename, format="jpeg", exif=exif_data, quality=95, subsampling=0)
+
+        return img, str(opts.seed), filename, None
 
 def create_demo(model_name: str, device: str = "cuda" if torch.cuda.is_available() else "cpu", offload: bool = False):
     generator = FluxGenerator(model_name, device, offload)
