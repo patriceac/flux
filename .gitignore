@@ -4,3 +4,4 @@
 /src/flux/__pycache__
 /src/flux/__pycache__
 /output
+*.pyc
